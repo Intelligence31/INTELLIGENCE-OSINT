@@ -2,28 +2,14 @@
 =========================================================
 INTELLIGENCE OSINT ENGINE
 BACKEND - APP.PY
-Mission 006
-=========================================================
-
-FastAPI entry point for the INTELLIGENCE OSINT Engine.
-
-Current stage:
-- API server
-- CORS configuration
-- Username endpoint
-- Phone endpoint
-- Email endpoint
-- IP endpoint
-- Domain endpoint
-- Location endpoint
-
-The actual intelligence providers will be connected
-through separate service modules.
+MISSION 006
 =========================================================
 """
 
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
+
+from services.username import search_username
 
 
 # =========================================================
@@ -32,10 +18,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 app = FastAPI(
     title="INTELLIGENCE OSINT ENGINE",
-    description=(
-        "Public-source intelligence analysis API "
-        "for the INTELLIGENCE Mission 006 project."
-    ),
+    description="Public-source intelligence analysis API.",
     version="1.0.0",
 )
 
@@ -47,16 +30,11 @@ app = FastAPI(
 app.add_middleware(
     CORSMiddleware,
 
-    allow_origins=[
-        "http://localhost",
-        "http://127.0.0.1",
-        "http://localhost:5500",
-        "http://127.0.0.1:5500",
-    ],
+    allow_origins=["*"],
 
     allow_credentials=True,
 
-    allow_methods=["GET"],
+    allow_methods=["*"],
 
     allow_headers=["*"],
 )
@@ -91,7 +69,7 @@ async def health():
 
 
 # =========================================================
-# USERNAME
+# USERNAME OSINT
 # =========================================================
 
 @app.get("/api/username")
@@ -103,210 +81,164 @@ async def username_lookup(
     )
 ):
 
-    target = target.strip()
+    target = target.strip().lstrip("@")
 
     if not target:
+
         raise HTTPException(
             status_code=400,
             detail="Username is required."
         )
 
-    return {
-        "backendReady": True,
-        "type": "username",
-        "target": target,
-        "status": "provider_pending",
-        "message": (
-            "Username intelligence provider "
-            "will be connected here."
-        ),
-        "profiles": [],
-    }
+
+    try:
+
+        results = await search_username(
+            target
+        )
+
+
+        return {
+
+            "backendReady": True,
+
+            "type": "username",
+
+            "target": target,
+
+            "status": "completed",
+
+            "intelligence": results
+
+        }
+
+
+    except Exception as error:
+
+        print(
+            f"Username lookup error: {error}"
+        )
+
+        raise HTTPException(
+
+            status_code=500,
+
+            detail="Username investigation failed."
+
+        )
 
 
 # =========================================================
-# PHONE
+# PLACEHOLDER ENDPOINTS
 # =========================================================
 
 @app.get("/api/phone")
 async def phone_lookup(
-    target: str = Query(
-        ...,
-        min_length=3,
-        max_length=30
-    )
+    target: str = Query(...)
 ):
 
-    target = target.strip()
-
-    if not target:
-        raise HTTPException(
-            status_code=400,
-            detail="Phone number is required."
-        )
-
     return {
+
         "backendReady": True,
+
         "type": "phone",
+
         "target": target,
-        "status": "provider_pending",
-        "message": (
-            "Phone intelligence provider "
-            "will be connected here."
-        ),
-        "verification": {},
+
+        "status": "provider_pending"
+
     }
 
-
-# =========================================================
-# EMAIL
-# =========================================================
 
 @app.get("/api/email")
 async def email_lookup(
-    target: str = Query(
-        ...,
-        min_length=5,
-        max_length=254
-    )
+    target: str = Query(...)
 ):
 
-    target = target.strip()
-
-    if not target:
-        raise HTTPException(
-            status_code=400,
-            detail="Email address is required."
-        )
-
     return {
+
         "backendReady": True,
+
         "type": "email",
+
         "target": target,
-        "status": "provider_pending",
-        "message": (
-            "Email intelligence provider "
-            "will be connected here."
-        ),
-        "intelligence": {},
+
+        "status": "provider_pending"
+
     }
 
-
-# =========================================================
-# IP ADDRESS
-# =========================================================
 
 @app.get("/api/ip")
 async def ip_lookup(
-    target: str = Query(
-        ...,
-        min_length=3,
-        max_length=45
-    )
+    target: str = Query(...)
 ):
 
-    target = target.strip()
-
-    if not target:
-        raise HTTPException(
-            status_code=400,
-            detail="IP address is required."
-        )
-
     return {
+
         "backendReady": True,
+
         "type": "ip",
+
         "target": target,
-        "status": "provider_pending",
-        "message": (
-            "IP intelligence provider "
-            "will be connected here."
-        ),
-        "network": {},
-        "location": {},
+
+        "status": "provider_pending"
+
     }
 
-
-# =========================================================
-# DOMAIN
-# =========================================================
 
 @app.get("/api/domain")
 async def domain_lookup(
-    target: str = Query(
-        ...,
-        min_length=3,
-        max_length=253
-    )
+    target: str = Query(...)
 ):
 
-    target = target.strip().lower()
-
-    if not target:
-        raise HTTPException(
-            status_code=400,
-            detail="Domain is required."
-        )
-
     return {
+
         "backendReady": True,
+
         "type": "domain",
+
         "target": target,
-        "status": "provider_pending",
-        "message": (
-            "Domain intelligence provider "
-            "will be connected here."
-        ),
-        "dns": {},
-        "registration": {},
+
+        "status": "provider_pending"
+
     }
 
-
-# =========================================================
-# LOCATION
-# =========================================================
 
 @app.get("/api/location")
 async def location_lookup(
-    target: str = Query(
-        ...,
-        min_length=2,
-        max_length=200
-    )
+    target: str = Query(...)
 ):
 
-    target = target.strip()
-
-    if not target:
-        raise HTTPException(
-            status_code=400,
-            detail="Location is required."
-        )
-
     return {
+
         "backendReady": True,
+
         "type": "location",
+
         "target": target,
-        "status": "provider_pending",
-        "message": (
-            "Location intelligence provider "
-            "will be connected here."
-        ),
-        "geography": {},
+
+        "status": "provider_pending"
+
     }
 
 
 # =========================================================
-# SERVER INFORMATION
+# SYSTEM INFORMATION
 # =========================================================
 
 @app.get("/api/system")
 async def system_information():
 
     return {
+
         "engine": "INTELLIGENCE OSINT",
+
         "mission": "006",
+
         "version": "1.0.0",
+
         "mode": "PUBLIC DATA",
-        "status": "OPERATIONAL",
+
+        "status": "OPERATIONAL"
+
     }
