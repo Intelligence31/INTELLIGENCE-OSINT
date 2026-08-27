@@ -1,60 +1,54 @@
 """
 =========================================================
 INTELLIGENCE OSINT ENGINE
-USERNAME SERVICE
-Mission 006
+USERNAME INTELLIGENCE SERVICE
+MISSION 006
 =========================================================
 
-Checks publicly accessible profile URLs for supported
-platforms.
+Checks publicly accessible profile URLs.
 
 IMPORTANT:
-- This module does not bypass login walls.
-- It does not access private accounts.
-- A matching username is only a POSSIBLE MATCH.
-- A match does not prove account ownership.
+A profile URL returning successfully is only a
+POSSIBLE MATCH. It does NOT establish identity or
+ownership of an account.
+
+This service does not:
+- bypass authentication
+- access private accounts
+- scrape private information
+- attempt to defeat platform protections
 =========================================================
 """
 
 import asyncio
+import re
+
 import httpx
 
 
 # =========================================================
-# SUPPORTED PUBLIC PLATFORMS
+# PUBLIC PROFILE URLS
 # =========================================================
 
 PLATFORMS = {
-
     "X": "https://x.com/{username}",
-
     "Instagram": "https://www.instagram.com/{username}/",
-
     "Facebook": "https://www.facebook.com/{username}",
-
     "TikTok": "https://www.tiktok.com/@{username}",
-
     "Reddit": "https://www.reddit.com/user/{username}/",
-
     "GitHub": "https://github.com/{username}",
-
     "LinkedIn": "https://www.linkedin.com/in/{username}/",
-
     "YouTube": "https://www.youtube.com/@{username}",
-
     "Pinterest": "https://www.pinterest.com/{username}/",
-
     "Twitch": "https://www.twitch.tv/{username}",
-
 }
 
 
 # =========================================================
-# USER AGENT
+# REQUEST SETTINGS
 # =========================================================
 
 HEADERS = {
-
     "User-Agent": (
         "Mozilla/5.0 "
         "(Windows NT 10.0; Win64; x64) "
@@ -62,70 +56,96 @@ HEADERS = {
         "(KHTML, like Gecko) "
         "Chrome/131.0 Safari/537.36"
     )
-
 }
+
+REQUEST_TIMEOUT = 8.0
 
 
 # =========================================================
-# CHECK SINGLE PLATFORM
+# USERNAME VALIDATION
+# =========================================================
+
+def clean_username(username: str) -> str:
+
+    username = username.strip()
+
+    # Remove a leading @ if supplied.
+    username = username.lstrip("@")
+
+    # Remove accidental spaces.
+    username = username.replace(" ", "")
+
+    return username
+
+
+def valid_username(username: str) -> bool:
+
+    if not username:
+        return False
+
+    if len(username) > 100:
+        return False
+
+    return bool(
+        re.fullmatch(
+            r"[A-Za-z0-9._-]+",
+            username
+        )
+    )
+
+
+# =========================================================
+# CHECK ONE PLATFORM
 # =========================================================
 
 async def check_platform(
     client: httpx.AsyncClient,
     platform: str,
-    url: str
+    profile_url: str
 ):
 
     try:
 
         response = await client.get(
-            url,
+            profile_url,
             headers=HEADERS,
             follow_redirects=True,
-            timeout=8.0
+            timeout=REQUEST_TIMEOUT
         )
 
 
         # -------------------------------------------------
-        # SUCCESSFUL PUBLIC PAGE
+        # POSSIBLE PUBLIC PROFILE
         # -------------------------------------------------
 
         if response.status_code == 200:
 
             return {
-
                 "platform": platform,
-
                 "status": "possible_match",
-
                 "url": str(response.url),
-
-                "http_status": response.status_code
-
+                "http_status": response.status_code,
+                "confidence": "low"
             }
 
 
         # -------------------------------------------------
-        # NOT FOUND
+        # PROFILE NOT FOUND
         # -------------------------------------------------
 
         if response.status_code == 404:
 
             return {
-
                 "platform": platform,
-
                 "status": "not_found",
-
-                "url": url,
-
-                "http_status": response.status_code
-
+                "url": profile_url,
+                "http_status": response.status_code,
+                "confidence": "none"
             }
 
 
         # -------------------------------------------------
-        # BLOCKED / RATE LIMITED / RESTRICTED
+        # PLATFORM DID NOT ALLOW THE REQUEST
         # -------------------------------------------------
 
         if response.status_code in (
@@ -135,15 +155,11 @@ async def check_platform(
         ):
 
             return {
-
                 "platform": platform,
-
                 "status": "unavailable",
-
-                "url": url,
-
-                "http_status": response.status_code
-
+                "url": profile_url,
+                "http_status": response.status_code,
+                "confidence": "unknown"
             }
 
 
@@ -152,64 +168,55 @@ async def check_platform(
         # -------------------------------------------------
 
         return {
-
             "platform": platform,
-
             "status": "unknown",
-
-            "url": url,
-
-            "http_status": response.status_code
-
+            "url": profile_url,
+            "http_status": response.status_code,
+            "confidence": "unknown"
         }
 
 
     except httpx.TimeoutException:
 
         return {
-
             "platform": platform,
-
             "status": "timeout",
-
-            "url": url
-
+            "url": profile_url,
+            "confidence": "unknown"
         }
 
 
     except httpx.RequestError:
 
         return {
-
             "platform": platform,
-
             "status": "connection_error",
-
-            "url": url
-
+            "url": profile_url,
+            "confidence": "unknown"
         }
 
 
 # =========================================================
-# USERNAME SEARCH
+# USERNAME INVESTIGATION
 # =========================================================
 
 async def search_username(username: str):
 
-    username = username.strip().lstrip("@")
+    username = clean_username(username)
 
-    if not username:
+
+    if not valid_username(username):
 
         return {
-
             "username": username,
-
-            "results": []
-
+            "total_platforms_checked": 0,
+            "possible_matches": 0,
+            "results": [],
+            "error": (
+                "Invalid username. Use letters, numbers, "
+                "dots, underscores or hyphens."
+            )
         }
-
-
-    results = []
 
 
     async with httpx.AsyncClient() as client:
@@ -219,16 +226,15 @@ async def search_username(username: str):
 
         for platform, template in PLATFORMS.items():
 
-            url = template.format(
+            profile_url = template.format(
                 username=username
             )
-
 
             tasks.append(
                 check_platform(
                     client,
                     platform,
-                    url
+                    profile_url
                 )
             )
 
@@ -239,11 +245,9 @@ async def search_username(username: str):
 
 
     possible_matches = [
-
         result
         for result in results
         if result["status"] == "possible_match"
-
     ]
 
 
